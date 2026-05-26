@@ -1,0 +1,115 @@
+CNN-LSTM LOSO 使用说明
+=====================
+
+一、脚本作用
+------------
+eval_loso_cnn_lstm.py 用于测试 CNN-LSTM 的跨个体 LOSO 准确率。
+
+它读取每个被试文件夹中的：
+
+    X_single_windows.npy
+    y_single_labels.npy
+
+默认四个被试文件夹：
+
+    .\records\session_merge_jny
+    .\records\session_merge_wjw
+    .\records\session_merge_zjh
+    .\records\session_merge_zly
+
+输入会自动从 [N, T, C] 转成 [N, C, T]。
+
+
+二、放置位置
+------------
+把 eval_loso_cnn_lstm.py 放到：
+
+    C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+然后进入工程目录：
+
+    cd C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+
+三、推荐先运行
+--------------
+先跑 per_window 版本，这和你原 CNN 的 per_window_norm=True 最接近：
+
+    python eval_loso_cnn_lstm.py --norm per_window --epochs 40 --batch_size 128 --out_dir .\results_loso_cnn_lstm_new
+
+
+四、如果某一类召回率很差
+------------------------
+可以加类别权重：
+
+    python eval_loso_cnn_lstm.py --norm per_window --class_weight --epochs 40 --batch_size 128 --out_dir .\results_loso_cnn_lstm_new
+
+
+五、CNN-LSTM 的基本思想
+----------------------
+结构：
+
+    输入 [B, C, T]
+        ↓
+    1D-CNN 提取局部波形特征
+        ↓
+    转成 [B, T', F]
+        ↓
+    LSTM 建模时间变化
+        ↓
+    FC 三分类
+
+相比纯 LSTM，CNN-LSTM 更适合你的数据：
+    CNN 先提取局部肌电波形结构；
+    LSTM 再看这些局部特征随时间的变化。
+
+
+六、可选实验
+------------
+1）双向 LSTM：
+
+    python eval_loso_cnn_lstm.py --norm per_window --bidirectional --epochs 40 --batch_size 128 --out_dir .\results_loso_cnn_lstm_new
+
+2）平均池化 LSTM 输出：
+
+    python eval_loso_cnn_lstm.py --norm per_window --temporal_pool mean --epochs 40 --batch_size 128 --out_dir .\results_loso_cnn_lstm_new
+
+3）更小模型，减少过拟合：
+
+    python eval_loso_cnn_lstm.py --norm per_window --conv_ch 32 --lstm_hidden 32 --epochs 40 --batch_size 128 --out_dir .\results_loso_cnn_lstm_new
+
+
+七、输出结果
+------------
+结果会保存到类似：
+
+    results_loso_cnn_lstm_new\cnn_lstm_norm-per_window_calib-0.00_T200_conv64_h64_layers1_last_drop0.35
+
+重点看：
+
+    summary.json
+    loso_cnn_lstm_results.csv
+    confusion_matrix_overall.png
+
+每个测试被试的文件夹里有：
+
+    classification_report.txt
+    confusion_matrix.png
+    loss_curve.png
+    accuracy_curve.png
+    best_model.pth
+
+
+八、和已有结果对比
+------------------
+把 CNN-LSTM 结果加到这张表里：
+
+    SVM-all                   66.86%
+    SVM-shape                 64.42%
+    Feature-map CNN shape     55.55%
+    MS-CNN + class_weight     54.99%
+    MS-CNN                    54.85%
+    TCN                       53.66%
+    1D-CNN                    53.59%
+    STFT-CNN 0.2s             49.50%
+    CNN-LSTM                  待测试

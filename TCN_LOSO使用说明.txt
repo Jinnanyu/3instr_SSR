@@ -1,0 +1,128 @@
+TCN LOSO 使用说明
+=================
+
+一、脚本作用
+------------
+eval_loso_tcn.py 用于测试 TCN / Dilated Temporal CNN 的跨个体 LOSO 准确率。
+
+它读取每个被试文件夹中的：
+
+    X_single_windows.npy
+    y_single_labels.npy
+
+默认四个被试文件夹：
+
+    .\records\session_merge_jny
+    .\records\session_merge_wjw
+    .\records\session_merge_zjh
+    .\records\session_merge_zly
+
+输入会自动从 [N, T, C] 转成 [N, C, T]。
+
+
+二、放置位置
+------------
+把 eval_loso_tcn.py 放到：
+
+    C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+然后进入工程目录：
+
+    cd C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+
+三、推荐先运行
+--------------
+先跑 per_window 版本，这和你原 CNN 的 per_window_norm=True 最接近：
+
+    python eval_loso_tcn.py --norm per_window --epochs 40 --batch_size 128 --out_dir .\results_loso_tcn_new
+
+
+四、TCN 的基本思想
+-----------------
+TCN 用扩张卷积扩大时间感受野：
+
+    dilation = 1, 2, 4, 8
+
+含义是：
+    不增加输入窗口长度，但让模型看到更长的时间上下文。
+
+这和 0.3s / 0.4s STFT 不同：
+    STFT 加长窗口会增加实时延迟；
+    TCN 仍然使用 0.2s 窗口，只是在模型内部扩大时间建模范围。
+
+
+五、如果某一类召回率很差
+------------------------
+可以加类别权重：
+
+    python eval_loso_tcn.py --norm per_window --class_weight --epochs 40 --batch_size 128 --out_dir .\results_loso_tcn_new
+
+class_weight 不一定提高 accuracy，但可能改善 macro-F1。
+
+
+六、如果想试更小的 TCN
+----------------------
+如果模型过拟合明显，可以试更小通道数：
+
+    python eval_loso_tcn.py --norm per_window --channels 32 --epochs 40 --batch_size 128 --out_dir .\results_loso_tcn_new
+
+
+七、如果想试不同扩张范围
+------------------------
+默认：
+
+    --dilations 1,2,4,8
+
+更轻量：
+
+    python eval_loso_tcn.py --norm per_window --dilations 1,2,4 --epochs 40 --batch_size 128 --out_dir .\results_loso_tcn_new
+
+更大感受野：
+
+    python eval_loso_tcn.py --norm per_window --dilations 1,2,4,8,16 --epochs 40 --batch_size 128 --out_dir .\results_loso_tcn_new
+
+
+八、输出结果
+------------
+结果会保存到类似：
+
+    results_loso_tcn_new\tcn_norm-per_window_calib-0.00_T200_ch64_k5_d1-2-4-8_drop0.35
+
+重点看：
+
+    summary.json
+    loso_tcn_results.csv
+    confusion_matrix_overall.png
+
+每个测试被试的文件夹里有：
+
+    classification_report.txt
+    confusion_matrix.png
+    loss_curve.png
+    accuracy_curve.png
+    best_model.pth
+
+
+九、和已有结果对比
+------------------
+把 TCN 结果加到这张表里：
+
+    SVM-all                   66.86%
+    SVM-shape                 64.42%
+    Feature-map CNN shape     55.55%
+    MS-CNN + class_weight     54.99%
+    MS-CNN                    54.85%
+    1D-CNN                    53.59%
+    STFT-CNN 0.2s             49.50%
+    TCN                       待测试
+
+如果 TCN 超过 1D-CNN / MS-CNN，说明时序卷积对你的跨个体任务有帮助。
+如果仍然不如 SVM，也可以说明当前小样本跨个体场景下手工 shape/all 特征更稳定。
+
+
+十、论文/组会中可以怎么描述？
+----------------------------
+可以写：
+
+    为进一步验证时间序列建模对跨个体识别的作用，本文参考 sEMG 识别中常用的 Temporal Convolutional Network，构建了轻量级 TCN。该模型通过 dilation=1、2、4、8 的扩张卷积在不增加输入窗口长度的情况下扩大时间感受野，从而学习更长范围的波形变化模式。实验采用相同的 LOSO 方式，与原始 1D-CNN、MS-CNN、STFT-CNN、Feature-map CNN 和 SVM 进行对比。

@@ -1,0 +1,200 @@
+跨个体三指令静默语音识别：代码改动与使用说明
+================================================
+
+一、文件放置
+------------------------------------------------
+把下面 4 个文件复制到你的工程目录：
+
+C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+需要复制的文件：
+1. features_emg.py              覆盖原文件；加入更多肌电特征
+2. train_svm_emg.py             覆盖原文件；修正三分类 left/right/up
+3. eval_loso_svm.py             新增；留一被试法跨个体评估
+4. visualize_features.py        新增；特征箱线图和 PCA 可视化
+
+建议先备份原始 features_emg.py 和 train_svm_emg.py。
+
+
+二、先检查 records 目录结构
+------------------------------------------------
+你的三个人数据建议保持如下结构：
+
+records\session_20260507_merge_jny
+records\session_20260421_merge_wjw
+records\session_20260424_merge_zjh
+
+每个文件夹最终都应该有：
+
+X_single_windows.npy
+X_features.npy
+y_single_labels.npy
+feature_names.csv
+windows_index.csv
+
+注意：你当前 wjw 和 zjh 已经有这些文件；jny 目前看起来只有 trial_*.npz，需要先生成窗口。
+
+
+三、给 jny 生成窗口和特征
+------------------------------------------------
+在 PowerShell 中执行：
+
+cd C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+python build_windows_from_trials.py `
+  --in_dir .\records\session_20260507_merge_jny `
+  --out_dir .\records\session_20260507_merge_jny `
+  --win_sec 0.20 `
+  --step_sec 0.05 `
+  --trim_head_sec 0.20 `
+  --trim_tail_sec 0.20 `
+  --rms_smooth_sec 0.02 `
+  --thr_q 0.55 `
+  --active_ratio_thresh 0.65 `
+  --save_features `
+  --write_index
+
+如果输出 no windows built，说明筛选太严格，可以临时降低：
+
+--active_ratio_thresh 0.50
+
+或者：
+
+--thr_q 0.50
+
+
+四、实验 1：单人内三分类 SVM 准确率
+------------------------------------------------
+目的：验证每个人自己的数据仍然效果不错。
+
+python train_svm_emg.py --data_dir .\records\session_20260507_merge_jny --out .\records\session_20260507_merge_jny\svm_jny.pkl
+python train_svm_emg.py --data_dir .\records\session_20260421_merge_wjw --out .\records\session_20260421_merge_wjw\svm_wjw.pkl
+python train_svm_emg.py --data_dir .\records\session_20260424_merge_zjh --out .\records\session_20260424_merge_zjh\svm_zjh.pkl
+
+你应该记录每个人 test accuracy、混淆矩阵。
+这部分用于证明：单人内识别效果较好。
+
+
+五、实验 2：跨个体 LOSO 基线
+------------------------------------------------
+目的：用其他两个人训练，剩下一个人测试。
+
+推荐先跑严格 Z-score 版本：
+
+python eval_loso_svm.py --norm train_zscore --feature_group all --clf svm --out_dir .\results_loso
+
+默认会执行三轮：
+
+wjw + zjh -> jny
+jny + zjh -> wjw
+jny + wjw -> zjh
+
+输出目录类似：
+
+results_loso\norm-train_zscore_feat-all_clf-svm
+
+里面有：
+
+loso_results.csv
+cm_test_jny.png
+cm_test_wjw.png
+cm_test_zjh.png
+cm_overall.png
+used_feature_names.csv
+config.json
+
+论文中优先报告 loso_results.csv 里的 MEAN_OF_ROUNDS。
+
+
+六、实验 3：归一化方式对比
+------------------------------------------------
+目的：验证导师提出的 MVC / 归一化是否有帮助。
+
+1）无原始归一化：
+python eval_loso_svm.py --norm none --feature_group all --clf svm --out_dir .\results_loso
+
+2）训练集 Z-score：
+python eval_loso_svm.py --norm train_zscore --feature_group all --clf svm --out_dir .\results_loso
+
+3）近似 MVC，即每个被试按自己每通道 95% 幅值分位数归一化：
+python eval_loso_svm.py --norm subject_p95 --feature_group all --clf svm --out_dir .\results_loso
+
+说明：subject_p95 不是真正 MVC，而是“无 MVC 采集条件下的幅值归一化替代方案”。
+如果后续专门采集 MVC trial，可以把 subject_p95_normalize 函数替换成读取真实 MVC 值。
+
+
+七、实验 4：不同特征组对比
+------------------------------------------------
+目的：看哪些特征在跨个体下更稳定。
+
+依次执行：
+
+python eval_loso_svm.py --norm none --feature_group rms --clf svm --out_dir .\results_loso
+python eval_loso_svm.py --norm none --feature_group amp --clf svm --out_dir .\results_loso
+python eval_loso_svm.py --norm none --feature_group shape --clf svm --out_dir .\results_loso
+python eval_loso_svm.py --norm none --feature_group freq --clf svm --out_dir .\results_loso
+python eval_loso_svm.py --norm none --feature_group all --clf svm --out_dir .\results_loso
+
+特征组含义：
+
+rms   ：只用 RMS
+amp   ：幅值类特征，如 RMS、IEMG、MAV、VAR、LOG
+shape ：波形复杂度类特征，如 WL、ZC、SSC、WAMP、DASDV、MAVS
+freq  ：频域特征，如 MNF、MDF
+all   ：全部特征
+
+建议论文中做成表格：
+
+特征组 | jny | wjw | zjh | LOSO 平均准确率
+
+
+八、实验 5：特征可视化
+------------------------------------------------
+目的：生成答辩和论文图片，说明“人”和“指令”的分布关系。
+
+python visualize_features.py --norm subject_p95 --out_dir .\results_feature_vis
+
+输出目录类似：
+
+results_feature_vis\norm-subject_p95
+
+里面有：
+
+pca_by_label.png
+pca_by_subject.png
+feature_boxplots\box_rms.png
+feature_boxplots\box_mav.png
+feature_boxplots\box_wl.png
+feature_boxplots\box_zc.png
+feature_boxplots\box_ssc.png
+feature_boxplots\box_wamp.png
+feature_boxplots\box_mnf.png
+feature_boxplots\box_mdf.png
+
+解读方式：
+
+1. pca_by_label.png
+   如果 left/right/up 分开明显，说明特征对指令有区分能力。
+
+2. pca_by_subject.png
+   如果 jny/wjw/zjh 分开明显，说明特征仍然强烈包含个体差异，跨个体泛化会差。
+
+3. box_*.png
+   看同一指令在不同被试之间的分布是否接近。
+   跨个体稳定的特征应该是：同一指令跨人差异小，不同指令之间差异大。
+
+
+九、论文中可以写的实验路线
+------------------------------------------------
+中期后，本文进一步开展跨个体三指令静默语音识别研究。首先采用留一被试法重新评价模型泛化能力，即每次使用两名被试的数据训练，剩余一名被试的数据测试。其次，针对不同被试之间肌电幅值差异明显的问题，设计无归一化、训练集 Z-score 标准化和近似 MVC 幅值归一化三组对照实验。最后，在原有 RMS 特征基础上扩展 MAV、IEMG、WL、ZC、SSC、WAMP、DASDV、MNF、MDF 等时域与频域特征，并通过箱线图和 PCA 可视化分析不同特征在跨个体条件下的稳定性。
+
+
+十、推荐最终运行顺序
+------------------------------------------------
+1. 覆盖/新增代码文件。
+2. 给 jny 生成 X_single_windows.npy 和 X_features.npy。
+3. 跑三个人单人内 SVM。
+4. 跑 LOSO：none、train_zscore、subject_p95。
+5. 跑不同 feature_group：rms、amp、shape、freq、all。
+6. 跑 visualize_features.py 生成图。
+7. 把 loso_results.csv 和图片整理进论文/PPT。

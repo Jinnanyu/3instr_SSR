@@ -1,0 +1,214 @@
+Feature-map CNN 使用说明
+=======================
+
+一、这个脚本做什么？
+-------------------
+eval_loso_featuremap_cnn.py 用于“特征图 CNN”的跨个体留一法测试。
+
+它读取每个被试 records/session_xxx 文件夹中的：
+
+    X_features.npy
+    y_single_labels.npy
+    feature_names.csv
+
+然后把每个窗口的特征向量整理成一个二维 feature map：
+
+              ch1   ch2   ch3   ch4   ch5
+    RMS       ...   ...   ...   ...   ...
+    MAV       ...   ...   ...   ...   ...
+    WL        ...   ...   ...   ...   ...
+    ZC        ...   ...   ...   ...   ...
+    SSC       ...   ...   ...   ...   ...
+    WAMP      ...   ...   ...   ...   ...
+    MNF       ...   ...   ...   ...   ...
+    MDF       ...   ...   ...   ...   ...
+
+也就是：
+
+    [特征数, 通道数]
+
+然后把它当作小图片输入 2D-CNN：
+
+    [N, 1, 特征数, 通道数]
+
+这样做的目的不是手动判断哪个特征最好，而是让 CNN 自动学习：
+    1. 哪些特征重要
+    2. 哪些通道重要
+    3. 哪些“特征-通道组合”更适合跨个体识别
+
+
+二、文件放在哪里？
+----------------
+把 eval_loso_featuremap_cnn.py 复制到你的工程目录：
+
+    C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+然后进入工程目录：
+
+    cd C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+
+三、运行前确认
+--------------
+每个被试文件夹中必须有：
+
+    X_features.npy
+    y_single_labels.npy
+    feature_names.csv
+
+如果没有 X_features.npy，需要先运行 build_windows_from_trials.py，并加上：
+
+    --save_features --write_index
+
+例如：
+
+    python build_windows_from_trials.py `
+      --in_dir .\records\session_20260507_merge_jny `
+      --out_dir .\records\session_20260507_merge_jny `
+      --win_sec 0.20 `
+      --step_sec 0.05 `
+      --trim_head_sec 0.20 `
+      --trim_tail_sec 0.20 `
+      --rms_smooth_sec 0.02 `
+      --thr_q 0.55 `
+      --active_ratio_thresh 0.65 `
+      --save_features `
+      --write_index
+
+
+四、最推荐先运行的命令
+--------------------
+先跑全部特征 feature map：
+
+    python eval_loso_featuremap_cnn.py --feature_group all --norm train_zscore --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+这会自动做三轮 LOSO：
+
+    wjw + zjh -> jny
+    jny + zjh -> wjw
+    jny + wjw -> zjh
+
+
+五、不同特征图的对比
+------------------
+你可以继续跑：
+
+1）只用 RMS：
+
+    python eval_loso_featuremap_cnn.py --feature_group rms --norm train_zscore --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+2）幅值类特征：
+
+    python eval_loso_featuremap_cnn.py --feature_group amp --norm train_zscore --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+3）波形形态类特征：
+
+    python eval_loso_featuremap_cnn.py --feature_group shape --norm train_zscore --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+4）频域特征：
+
+    python eval_loso_featuremap_cnn.py --feature_group freq --norm train_zscore --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+5）波形 + 频域特征：
+
+    python eval_loso_featuremap_cnn.py --feature_group shape_freq --norm train_zscore --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+6）全部特征：
+
+    python eval_loso_featuremap_cnn.py --feature_group all --norm train_zscore --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+
+六、输出结果看哪里？
+------------------
+结果会保存在：
+
+    results_loso_featuremap_cnn\featmap_group-all_norm-train_zscore_calib-0.00_shape-特征数x通道数
+
+重点看：
+
+    summary.json
+    loso_featuremap_cnn_results.csv
+    confusion_matrix_overall.png
+
+每一轮单独目录里还有：
+
+    classification_report.txt
+    confusion_matrix.png
+    loss_curve.png
+    accuracy_curve.png
+    mean_feature_map_left.png
+    mean_feature_map_right.png
+    mean_feature_map_up.png
+    best_model.pth
+    run_info.json
+
+其中 mean_feature_map_left/right/up.png 可以放到论文或 PPT 里，说明你构建了 feature map。
+
+
+七、少量目标人校准实验
+--------------------
+如果后续想做“新用户少量校准”，可以运行：
+
+    python eval_loso_featuremap_cnn.py --feature_group all --norm train_zscore --calib_ratio 0.1 --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+    python eval_loso_featuremap_cnn.py --feature_group all --norm train_zscore --calib_ratio 0.2 --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+    python eval_loso_featuremap_cnn.py --feature_group all --norm train_zscore --calib_ratio 0.3 --epochs 40 --batch_size 128 --out_dir .\results_loso_featuremap_cnn
+
+含义：
+
+    calib_ratio=0.1
+    表示目标测试被试中 10% 数据加入训练集，剩下 90% 作为最终测试集。
+
+这比较符合真实应用：
+    新用户第一次使用时，先采少量校准数据，再进入实时识别。
+
+
+八、如果 feature_names.csv 解析失败怎么办？
+------------------------------------------
+脚本会自动尝试 fallback reshape。
+
+默认假设 X_features.npy 的排列是：
+
+    feature_major:
+    [feat1_ch1, feat1_ch2, ..., feat1_ch5, feat2_ch1, ...]
+
+如果你的 X_features.npy 是：
+
+    [ch1_feat1, ch1_feat2, ..., ch2_feat1, ...]
+
+则改用：
+
+    python eval_loso_featuremap_cnn.py --fallback_layout channel_major --feature_group all --norm train_zscore --out_dir .\results_loso_featuremap_cnn
+
+不过更推荐保证 feature_names.csv 正确存在，因为这样特征图行名更准确，输出图片也更适合放论文。
+
+
+九、建议实验顺序
+----------------
+在旧数据上先验证：
+
+    1. feature_group all
+    2. feature_group shape_freq
+
+等你后续采集标准动作数据后，再正式跑：
+
+    1. 原始窗口 CNN
+    2. STFT-CNN
+    3. Feature-map CNN
+
+最终论文可以做表格：
+
+    方法                  输入形式                平均 LOSO 准确率
+    原始窗口 CNN           [T, C]                  xx%
+    SVM-all                手工特征向量             xx%
+    Feature-map CNN        [特征数, 通道数]         xx%
+    STFT-CNN               [频率, 时间, 通道]       xx%
+
+
+十、论文中可以怎么描述？
+----------------------
+可以写成：
+
+    为避免仅依赖人工筛选特征，本文进一步将每个窗口内提取的多种肌电特征按照“特征维度 × 通道维度”组织成二维 feature map，并输入轻量级二维卷积神经网络进行分类。该方法使模型能够自动学习不同特征、不同通道及其组合关系中的判别信息，从而进一步分析多特征联合表达在跨个体识别中的作用。
+

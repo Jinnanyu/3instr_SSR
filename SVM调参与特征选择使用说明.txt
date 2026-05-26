@@ -1,0 +1,121 @@
+SVM 超参数搜索 + 特征选择 使用说明
+================================
+
+一、这个脚本做什么？
+------------------
+eval_loso_svm_tune_select.py 用于在 LOSO 框架下做 SVM 超参数搜索和特征选择。
+
+它和普通网格搜索最大的区别是：
+
+    外层 LOSO：测试被试绝不参与训练和调参
+    内层 LOSO：只在训练被试内部选择最优参数
+
+这样可以避免数据泄露。
+
+例如外层测试 jny：
+
+    外层训练人：wjw + zjh + zly
+    外层测试人：jny
+
+内层调参时：
+
+    wjw+zjh -> zly
+    wjw+zly -> zjh
+    zjh+zly -> wjw
+
+然后选择内层平均 macro-F1 最高的参数，最后用 wjw+zjh+zly 重新训练，并测试 jny。
+
+
+二、放置位置
+------------
+把 eval_loso_svm_tune_select.py 放到：
+
+    C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+然后进入工程目录：
+
+    cd C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+
+三、推荐先跑 all 特征
+--------------------
+    python eval_loso_svm_tune_select.py --feature_group all --select_mode kbest --score macro_f1 --out_dir .\results_loso_svm_tuned
+
+这会搜索：
+
+    C = 0.1, 1, 10, 100
+    gamma = scale, 0.001, 0.01, 0.1, 1
+    class_weight = none, balanced
+    k = 5,10,15,20,30,40,60,80,120
+
+默认特征选择方法：
+
+    f_classif
+
+
+四、再跑 shape 特征
+------------------
+因为你之前 shape 特征已经很强，建议单独优化：
+
+    python eval_loso_svm_tune_select.py --feature_group shape --select_mode kbest --score macro_f1 --out_dir .\results_loso_svm_tuned
+
+
+五、如果你想比较不做特征选择
+----------------------------
+只做 SVM 超参数搜索：
+
+    python eval_loso_svm_tune_select.py --feature_group all --select_mode none --score macro_f1 --out_dir .\results_loso_svm_tuned
+
+    python eval_loso_svm_tune_select.py --feature_group shape --select_mode none --score macro_f1 --out_dir .\results_loso_svm_tuned
+
+
+六、如果你想加 mutual information 特征选择
+------------------------------------------
+会更慢，但可以试：
+
+    python eval_loso_svm_tune_select.py --feature_group all --select_mode kbest --selector_methods f_classif,mutual_info --score macro_f1 --out_dir .\results_loso_svm_tuned
+
+
+七、输出结果看哪里？
+------------------
+结果会保存在：
+
+    results_loso_svm_tuned\nested_svm_feat-all_select-kbest_score-macro_f1_Dxxx
+
+重点看：
+
+    summary.json
+    loso_tuned_svm_results.csv
+    confusion_matrix_overall.png
+
+每个测试被试目录里还有：
+
+    inner_tuning_results.csv
+    classification_report.txt
+    confusion_matrix.png
+    selected_features.txt
+
+其中 selected_features.txt 可以看每轮最终选中了哪些特征。
+
+
+八、如何和之前结果比较？
+------------------------
+之前你的主要结果：
+
+    SVM-all     66.86%
+    SVM-shape   64.42%
+
+跑完后看：
+
+    [SUMMARY] avg_accuracy=...
+    [SUMMARY] avg_macro_f1=...
+
+如果 tuned SVM-all 高于 66.86%，说明调参/特征选择有效。
+如果没有明显提升，也可以说明：原始 SVM-all 已经比较稳定，进一步调参收益有限。
+
+
+九、论文/组会里怎么解释？
+------------------------
+可以写：
+
+    为进一步提升 SVM 跨个体识别效果，本文在 LOSO 框架下加入超参数搜索和特征选择。为了避免测试被试信息泄露，本文采用嵌套 LOSO 策略：外层 LOSO 用于最终测试，内层 LOSO 仅在训练被试内部选择 SVM 的 C、gamma、class_weight 和特征子集数量 k。最终使用内层最优参数在所有训练被试上重新训练，并在外层测试被试上评估。

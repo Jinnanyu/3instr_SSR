@@ -1,0 +1,103 @@
+SVM-all + 10% 目标人校准 使用说明
+=================================
+
+一、实验定义
+------------
+完全 LOSO：
+
+    训练：其他 3 人
+    测试：目标人全部数据
+
+10% 目标人校准：
+
+    训练：其他 3 人 + 目标人 10% 有效窗口
+    测试：目标人剩余 90% 有效窗口
+
+注意：
+    这不再叫“完全 LOSO”，建议称为：
+    “LOSO with 10% target calibration”
+    “10% 目标人校准 LOSO”
+    “跨个体 + 少量个体校准”
+
+
+二、放置位置
+------------
+把 eval_loso_svm_calib.py 放到：
+
+    C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+然后进入工程目录：
+
+    cd C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+
+三、先跑 SVM-all + 10% 校准
+--------------------------
+    python eval_loso_svm_calib.py --feature_group all --calib_ratio 0.1 --out_dir .\results_loso_svm_calib
+
+
+四、再跑 SVM-shape + 10% 校准
+----------------------------
+    python eval_loso_svm_calib.py --feature_group shape --calib_ratio 0.1 --out_dir .\results_loso_svm_calib
+
+
+五、可选：使用 tuned SVM 中常见参数
+---------------------------------
+你之前 tuned all 中常见 C=1/10，gamma=0.01，可以试：
+
+    python eval_loso_svm_calib.py --feature_group all --calib_ratio 0.1 --C 1 --gamma 0.01 --out_dir .\results_loso_svm_calib
+
+    python eval_loso_svm_calib.py --feature_group all --calib_ratio 0.1 --C 10 --gamma 0.01 --out_dir .\results_loso_svm_calib
+
+
+六、可选：balanced
+-----------------
+    python eval_loso_svm_calib.py --feature_group all --calib_ratio 0.1 --class_weight balanced --out_dir .\results_loso_svm_calib
+
+
+七、输出结果
+------------
+结果保存在：
+
+    results_loso_svm_calib
+
+重点看：
+
+    summary.json
+    loso_svm_calib_results.csv
+    confusion_matrix_overall.png
+
+每个测试被试目录中还有：
+
+    classification_report.txt
+    confusion_matrix.png
+
+
+八、对比方式
+------------
+之前完全 LOSO 主结果：
+
+    SVM-all 完全 LOSO：66.86%
+    SVM-shape 完全 LOSO：64.42%
+
+跑完 10% 校准后，看最后输出：
+
+    [SUMMARY] avg_accuracy=...
+    [SUMMARY] avg_macro_f1=...
+
+建议整理成：
+
+    方法        完全 LOSO    10% 校准    提升
+    SVM-all     66.86%       xx.xx%     +xx.xx%
+    SVM-shape   64.42%       xx.xx%     +xx.xx%
+
+
+九、论文/组会表述
+----------------
+可以写：
+
+    在完全 LOSO 实验中，模型在无目标个体数据条件下进行跨个体测试。
+    然而在实际应用中，新用户通常可以在首次使用前进行少量预采集。
+    因此，本文进一步设计 10% 目标人校准实验：在每一轮测试中，
+    将目标被试 10% 的有效窗口按类别分层抽取并加入训练集，其余 90% 作为测试集。
+    该实验用于评估少量目标人数据对跨个体识别性能的提升效果。

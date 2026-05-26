@@ -1,0 +1,104 @@
+CNN 跨个体 LOSO 测试使用说明
+============================
+
+一、先确认数据文件
+----------------
+每个被试文件夹内必须有：
+
+X_single_windows.npy
+y_single_labels.npy
+
+默认脚本读取：
+
+records/session_20260507_merge_jny
+records/session_20260421_merge_wjw
+records/session_20260424_merge_zjh
+
+如果 jny 还没有 X_single_windows.npy，需要先运行：
+
+python build_windows_from_trials.py ^
+  --in_dir .\records\session_20260507_merge_jny ^
+  --out_dir .\records\session_20260507_merge_jny ^
+  --win_sec 0.20 ^
+  --step_sec 0.05 ^
+  --trim_head_sec 0.20 ^
+  --trim_tail_sec 0.20 ^
+  --save_features ^
+  --write_index
+
+PowerShell 可以用反引号 ` 续行，也可以写成一整行。
+
+二、复制脚本
+------------
+把 eval_loso_cnn.py 放到：
+
+C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+然后进入工程目录：
+
+cd C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+三、运行 CNN-LOSO
+----------------
+建议先跑与你原实时 CNN 最接近的 per_window：
+
+python eval_loso_cnn.py --norm per_window --epochs 40 --batch_size 128 --out_dir .\results_loso_cnn
+
+然后再跑对照：
+
+python eval_loso_cnn.py --norm none --epochs 40 --batch_size 128 --out_dir .\results_loso_cnn
+python eval_loso_cnn.py --norm train_zscore --epochs 40 --batch_size 128 --out_dir .\results_loso_cnn
+python eval_loso_cnn.py --norm subject_p95 --epochs 40 --batch_size 128 --out_dir .\results_loso_cnn
+
+四、参数含义
+------------
+--norm none
+    不进行额外归一化。
+
+--norm per_window
+    每个窗口、每个通道单独做 z-score。这个最接近你原 train_cnn_4actions_simple.py 的 per_window_norm=True。
+
+--norm train_zscore
+    只用训练被试计算通道 mean/std，再应用到测试被试。测试人不参与统计。
+
+--norm subject_p95
+    每个被试按每通道 abs 95% 分位数归一化。注意这只是近似幅值归一化，不是真正 MVC。
+
+五、输出结果
+------------
+结果会保存在：
+
+results_loso_cnn\norm-per_window
+results_loso_cnn\norm-none
+results_loso_cnn\norm-train_zscore
+results_loso_cnn\norm-subject_p95
+
+每个文件夹内重点看：
+
+loso_cnn_results.csv
+summary.json
+confusion_matrix_overall.png
+
+每一轮还有独立文件夹，例如：
+
+test-jny_train-wjw+zjh
+
+default 输出包括：
+
+classification_report.txt
+confusion_matrix.png
+loss_curve.png
+accuracy_curve.png
+best_model.pth
+
+六、论文中建议报告
+----------------
+建议重点整理这张表：
+
+测试被试 | 训练被试 | CNN-none | CNN-per_window | CNN-train_zscore | CNN-subject_p95
+jny     | wjw+zjh  | xx%      | xx%             | xx%              | xx%
+wjw     | jny+zjh  | xx%      | xx%             | xx%              | xx%
+zjh     | jny+wjw  | xx%      | xx%             | xx%              | xx%
+平均    | -        | xx%      | xx%             | xx%              | xx%
+
+注意：你的最终主模型应该看 CNN-LOSO，不要用 SVM 作为最终系统准确率。SVM 主要用于特征分析。

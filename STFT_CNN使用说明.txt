@@ -1,0 +1,164 @@
+STFT-CNN 跨个体实验使用说明
+===========================
+
+一、文件放置
+------------
+将 eval_loso_stft_cnn.py 复制到：
+
+C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+然后进入工程目录：
+
+cd C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+
+二、STFT-CNN 的输入是什么？
+---------------------------
+脚本直接读取每个被试目录中的：
+
+X_single_windows.npy
+y_single_labels.npy
+
+其中 X_single_windows.npy 预期形状是：
+
+[N, T, C]
+
+例如你的当前数据大概率是：
+
+[N, 200, 5]
+
+表示：窗口数 × 时间点 × 通道数。
+
+STFT-CNN 会把每个窗口变成：
+
+[N, C, F, S]
+
+含义是：窗口数 × 通道数 × 频率 bin × STFT 时间帧。
+
+对于 0.2s 窗口、fs=1000、n_fft=64、hop=16，大致会得到：
+
+[N, 5, 17左右, 13左右]
+
+实际形状会写入每一轮输出目录的 stft_shape_info.json。
+
+
+三、先跑当前 0.2s 数据
+----------------------
+先跑最推荐的默认组：
+
+python eval_loso_stft_cnn.py --raw_norm per_window --spec_norm train_zscore --n_fft 64 --hop_length 16 --epochs 40 --batch_size 128 --out_dir .\results_loso_stft_cnn
+
+说明：
+--raw_norm per_window：最接近你原来的 CNN per_window_norm=True
+--spec_norm train_zscore：只用训练集频谱图统计 mean/std，再用于 val/test
+--n_fft 64：0.2s 窗口下比较合适
+--hop_length 16：STFT 时间步更密
+
+
+四、对照实验：不同 n_fft
+-----------------------
+0.2s 窗口可以先比较：
+
+python eval_loso_stft_cnn.py --raw_norm per_window --spec_norm train_zscore --n_fft 64 --hop_length 16 --epochs 40 --out_dir .\results_loso_stft_cnn
+python eval_loso_stft_cnn.py --raw_norm per_window --spec_norm train_zscore --n_fft 128 --hop_length 32 --epochs 40 --out_dir .\results_loso_stft_cnn
+
+如果 n_fft=128 效果差，不奇怪，因为当前窗口只有 200 点，频谱图时间帧会比较少。
+
+
+五、测试更长窗长：0.3s / 0.4s / 0.5s
+------------------------------------
+STFT-CNN 脚本不会自动改变窗口长度。窗口长度由 X_single_windows.npy 决定。
+
+如果要测试 0.3s，需要先重新构建窗口，建议输出到新目录，避免覆盖旧数据。
+
+示例：jny 0.3s：
+
+python build_windows_from_trials.py ^
+  --in_dir .\records\session_20260507_merge_jny ^
+  --out_dir .\records\session_20260507_merge_jny_win030 ^
+  --win_sec 0.30 ^
+  --step_sec 0.05 ^
+  --trim_head_sec 0.20 ^
+  --trim_tail_sec 0.20 ^
+  --rms_smooth_sec 0.02 ^
+  --thr_q 0.55 ^
+  --active_ratio_thresh 0.65 ^
+  --save_features ^
+  --write_index
+
+wjw / zjh 同理：
+
+python build_windows_from_trials.py --in_dir .\records\session_20260421_merge_wjw --out_dir .\records\session_20260421_merge_wjw_win030 --win_sec 0.30 --step_sec 0.05 --trim_head_sec 0.20 --trim_tail_sec 0.20 --rms_smooth_sec 0.02 --thr_q 0.55 --active_ratio_thresh 0.65 --save_features --write_index
+
+python build_windows_from_trials.py --in_dir .\records\session_20260424_merge_zjh --out_dir .\records\session_20260424_merge_zjh_win030 --win_sec 0.30 --step_sec 0.05 --trim_head_sec 0.20 --trim_tail_sec 0.20 --rms_smooth_sec 0.02 --thr_q 0.55 --active_ratio_thresh 0.65 --save_features --write_index
+
+然后运行 STFT-CNN：
+
+python eval_loso_stft_cnn.py ^
+  --jny_dir .\records\session_20260507_merge_jny_win030 ^
+  --wjw_dir .\records\session_20260421_merge_wjw_win030 ^
+  --zjh_dir .\records\session_20260424_merge_zjh_win030 ^
+  --raw_norm per_window ^
+  --spec_norm train_zscore ^
+  --n_fft 128 ^
+  --hop_length 32 ^
+  --epochs 40 ^
+  --out_dir .\results_loso_stft_cnn
+
+0.4s / 0.5s 也一样，只是 out_dir 和 --win_sec 改成 0.40 / 0.50。
+
+推荐参数：
+0.2s：n_fft=64, hop=16
+0.3s：n_fft=128, hop=32
+0.4s：n_fft=128, hop=32
+0.5s：n_fft=128, hop=32 或 n_fft=256, hop=64
+
+注意：窗长越长，离线识别可能更稳，但实时延迟也越大。论文中建议把 0.4s/0.5s 写成“离线跨个体分析”，不要直接说适合实时控制。
+
+
+六、输出结果看哪里？
+--------------------
+结果会保存到：
+
+results_loso_stft_cnn\raw-xxx_spec-xxx_Txxx_win..._nfft..._hop...
+
+重点看：
+
+summary.json
+loso_stft_cnn_results.csv
+confusion_matrix_overall.png
+
+每一轮单独目录里还有：
+
+classification_report.txt
+confusion_matrix.png
+loss_curve.png
+accuracy_curve.png
+train_mean_stft_left.png
+train_mean_stft_right.png
+train_mean_stft_up.png
+best_model.pth
+stft_shape_info.json
+
+
+七、建议论文中的对比表
+----------------------
+建议你最后整理成：
+
+方法 | 输入 | jny | wjw | zjh | 平均准确率 | 平均 macro-F1
+SVM-all | 手工特征 | 34.69 | 37.56 | 40.63 | 37.63 | ...
+1D-CNN | 原始窗口 0.2s | 33.76 | 44.71 | 41.78 | 40.08 | 36.15
+STFT-CNN | STFT 0.2s | ... | ... | ... | ... | ...
+STFT-CNN | STFT 0.3s | ... | ... | ... | ... | ...
+STFT-CNN | STFT 0.4s | ... | ... | ... | ... | ...
+
+
+八、如果运行很慢怎么办？
+------------------------
+1. 先减少 epoch：--epochs 20
+2. 减小 batch：--batch_size 64
+3. STFT 预处理太慢时，可以加：--stft_on_gpu
+4. 显存不够时，不要用 --stft_on_gpu，并把 --stft_batch_size 改小：
+
+python eval_loso_stft_cnn.py --raw_norm per_window --spec_norm train_zscore --n_fft 64 --hop_length 16 --stft_batch_size 256 --epochs 30 --out_dir .\results_loso_stft_cnn
+

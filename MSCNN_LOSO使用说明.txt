@@ -1,0 +1,88 @@
+MS-CNN LOSO 使用说明
+===================
+
+一、脚本作用
+------------
+eval_loso_mscnn.py 用于测试 Multi-Scale CNN 的跨个体 LOSO 准确率。
+
+它读取每个被试文件夹中的：
+
+    X_single_windows.npy
+    y_single_labels.npy
+
+默认四个被试文件夹：
+
+    .\records\session_merge_jny
+    .\records\session_merge_wjw
+    .\records\session_merge_zjh
+    .\records\session_merge_zly
+
+输入会自动从 [N, T, C] 转成 [N, C, T]。
+
+
+二、放置位置
+------------
+把 eval_loso_mscnn.py 放到：
+
+    C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+然后进入工程目录：
+
+    cd C:\Users\Administrator\Desktop\HMILAB\毕业设计\final\epstudiosdk
+
+
+三、推荐先运行
+--------------
+先跑 per_window 版本，这和你原 CNN 的 per_window_norm=True 最接近：
+
+    python eval_loso_mscnn.py --norm per_window --epochs 40 --batch_size 128 --out_dir .\results_loso_mscnn_new
+
+
+四、如果某一类召回率很差
+------------------------
+可以加类别权重：
+
+    python eval_loso_mscnn.py --norm per_window --class_weight --epochs 40 --batch_size 128 --out_dir .\results_loso_mscnn_new
+
+class_weight 不一定提高 accuracy，但可能提高 macro-F1。
+
+
+五、如果想测试 train_zscore
+--------------------------
+    python eval_loso_mscnn.py --norm train_zscore --epochs 40 --batch_size 128 --out_dir .\results_loso_mscnn_new
+
+
+六、输出结果
+------------
+结果会保存到类似：
+
+    results_loso_mscnn_new\mscnn_norm-per_window_calib-0.00_T200_base32_drop0.35
+
+重点看：
+
+    summary.json
+    loso_mscnn_results.csv
+    confusion_matrix_overall.png
+
+每个测试被试的文件夹里有：
+
+    classification_report.txt
+    confusion_matrix.png
+    loss_curve.png
+    accuracy_curve.png
+    best_model.pth
+
+
+七、和已有结果对比
+------------------
+你可以把 MS-CNN 结果加到这张表里：
+
+    SVM-all                66.86%
+    SVM-shape              64.42%
+    Feature-map CNN shape  55.55%
+    1D-CNN                 53.59%
+    STFT-CNN 0.2s          49.50%
+    MS-CNN                 待测试
+
+如果 MS-CNN 超过 1D-CNN，就说明多尺度卷积比原 CNN 更适合你的跨个体任务。
+如果仍然不如 SVM，也可以说明当前小样本跨个体场景下手工 shape/all 特征更稳定。
